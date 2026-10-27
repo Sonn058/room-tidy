@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>방 정리 대작전</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script>
+    // 방 전환으로 다시 불러온 경우: 이전 화면 스냅샷을 이어서 보여 주고 메뉴 등장 애니메이션은 생략한다
+    try {
+      var snap = sessionStorage.getItem('room-tidy:snap');
+      if (snap) {
+        sessionStorage.removeItem('room-tidy:snap');
+        document.documentElement.classList.add('switching');
+        window.__snap = snap;
+      }
+    } catch (e) { /* 저장소를 못 쓰는 환경은 그냥 진행 */ }
+  </script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+        "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <!-- 화면 전환 커튼: 새 방이 다 그려질 때까지 덮어 두었다가 서서히 걷힌다 -->
+  <div id="curtain"></div>
+  <script>
+    if (window.__snap) document.getElementById('curtain').style.backgroundImage = 'url(' + window.__snap + ')';
+  </script>
+
+  <div id="hud" class="hidden">
+    <div id="crosshair" class="idle"><span></span></div>
+    <div id="prompt"></div>
+
+    <section id="checklist" class="glass">
+      <div id="map-label" class="kicker"></div>
+      <div class="list-head">
+        <h2>정리 목록</h2>
+        <span id="progress-text">0%</span>
+      </div>
+      <div id="progress"><div id="progress-bar"></div></div>
+      <ul id="tasks"></ul>
+    </section>
+
+    <div id="timer" class="glass">00:00</div>
+    <div id="score" class="glass">
+      <div class="kicker">SCORE</div>
+      <div id="score-value">0</div>
+      <div id="combo"></div>
+      <div id="combo-track"><div id="combo-bar"></div></div>
+    </div>
+    <div id="pops"></div>
+    <div id="toasts"></div>
+
+    <section id="keys" class="glass">
+      <div><span class="key">WASD</span>이동</div>
+      <div><span class="key">Shift</span>달리기</div>
+      <div><span class="key">Space</span>점프</div>
+      <div><span class="key">C</span>앉기</div>
+      <div><span class="key">클릭</span><span class="key">E</span>집기 · 놓기 · 서랍 열기</div>
+      <div><span class="key">우클릭</span><span class="key">Q</span>던지기</div>
+      <div><span class="key">R</span><span class="key">T</span>회전 · 뒤집기</div>
+      <div><span class="key">휠</span>거리 조절</div>
+      <div><span class="key">F</span>힌트 (놓을 곳 보기)</div>
+      <div class="dim"><span class="key">H</span>도움말 숨기기</div>
+    </section>
+  </div>
+
+  <!-- 타이틀(메인) 화면: 방 안을 천천히 도는 카메라 + 로고 + 메뉴 -->
+  <div id="title" class="overlay overlay-title hidden">
+    <div class="title-main">
+      <div class="title-logo">
+        <div class="kicker">COZY TIDY-UP · FIRST PERSON</div>
+        <h1 class="logo"><img src="assets/logo.png" alt="방 정리 대작전"></h1>
+        <p class="tagline">어질러진 방 곳곳에서, 물건들이 제자리를 기다리고 있어요.</p>
+      </div>
+      <nav id="title-menu" class="title-menu">
+        <button data-act="play" class="primary big"><span>게임 시작</span><kbd>Enter</kbd></button>
+        <button data-act="mp" class="secondary"><span>2인 대전</span><kbd>NEW</kbd></button>
+        <button data-act="help" class="secondary"><span>조작법</span></button>
+        <button data-act="settings" class="secondary"><span>설정</span></button>
+        <button data-act="records" class="secondary"><span>기록</span></button>
+      </nav>
+    </div>
+
+    <section id="title-sheet" class="title-sheet glass hidden">
+      <div class="sheet-head">
+        <div>
+          <div id="sheet-kicker" class="kicker"></div>
+          <h2 id="sheet-title"></h2>
+        </div>
+        <button id="sheet-close" class="secondary small"><span>닫기</span><kbd>Esc</kbd></button>
+      </div>
+
+      <div id="sheet-help" class="sheet-body controls">
+        <div><span>둘러보기</span><span><span class="key">마우스</span></span></div>
+        <div><span>이동 · 달리기</span><span><span class="key">WASD</span><span class="key">Shift</span></span></div>
+        <div><span>점프 · 앉기</span><span><span class="key">Space</span><span class="key">C</span></span></div>
+        <div><span>집기 · 내려놓기</span><span><span class="key">클릭</span><span class="key">E</span></span></div>
+        <div><span>던지기</span><span><span class="key">우클릭</span><span class="key">Q</span></span></div>
+        <div><span>회전 · 뒤집기</span><span><span class="key">R</span><span class="key">T</span></span></div>
+        <div><span>들고 있는 거리</span><span><span class="key">휠</span></span></div>
+        <div><span>서랍 열기 · 의자 옮기기</span><span><span class="key">클릭</span><span class="key">E</span></span></div>
+        <div><span>힌트 (놓을 곳 보기)</span><span><span class="key">F</span></span></div>
+        <div><span>일시정지</span><span><span class="key">Esc</span></span></div>
+        <p class="sheet-note">물건의 제자리는 직접 찾아야 해요. 쓰레기는 휴지통에, 나머지는 어울리는 곳에!
+          서랍은 앞을 막은 의자를 먼저 옮겨야 열려요.</p>
+      </div>
+
+      <div id="sheet-settings" class="sheet-body">
+        <div class="setting">
+          <label for="set-sens">마우스 감도</label>
+          <input type="range" id="set-sens" min="0.4" max="2" step="0.05">
+          <output id="set-sens-v"></output>
+        </div>
+        <div class="setting">
+          <label for="set-vol">효과음 볼륨</label>
+          <input type="range" id="set-vol" min="0" max="1" step="0.05">
+          <output id="set-vol-v"></output>
+        </div>
+        <div class="setting">
+          <label for="set-music">배경음악 볼륨</label>
+          <input type="range" id="set-music" min="0" max="1" step="0.05">
+          <output id="set-music-v"></output>
+        </div>
+        <div class="setting">
+          <span>화면 흔들림</span>
+          <div id="set-bob" class="seg"><button data-v="on">켜기</button><button data-v="off">끄기</button></div>
+        </div>
+        <button id="set-reset" class="secondary">기본값으로 되돌리기</button>
+      </div>
+
+      <div id="sheet-records" class="sheet-body"></div>
+
+      <!-- 2인 대전 로비: 방 만들기 / 코드로 참가 -->
+      <div id="sheet-mp" class="sheet-body mp-lobby">
+        <p class="sheet-note">한 명은 <b>정리 담당</b>, 한 명은 <b>방해꾼</b>! 150초 뒤 정리율이 70% 이상이면 정리 담당 승리,
+          아니면 방해꾼 승리예요. 방해꾼은 에너지를 써서 물건을 어지르고, 같은 물건·구역은 잠시 다시 못 건드려요.</p>
+        <div class="mp-block">
+          <div class="field-label">방 만들기</div>
+          <div class="seg seg-3" id="mp-map"></div>
+          <button id="mp-create" class="primary"><span>방 만들고 코드 받기</span></button>
+          <p class="mp-hint">역할(정리 담당 · 방해꾼)은 대기 화면에서 두 사람이 정해요.</p>
+        </div>
+        <div class="mp-block">
+          <div class="field-label">코드로 참가하기</div>
+          <div class="mp-join">
+            <input id="mp-code" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false">
+            <button id="mp-join" class="primary"><span>참가</span></button>
+          </div>
+          <p id="mp-lobby-msg" class="mp-msg"></p>
+        </div>
+      </div>
+    </section>
+
+    <div class="title-foot">
+      <span><span class="key">↑</span><span class="key">↓</span>선택 · <span class="key">Enter</span>확인</span>
+      <span>2026 · 디지털패브리케이션2</span>
+    </div>
+  </div>
+
+  <!-- 시작 화면: 왼쪽 메뉴 패널 + 오른쪽은 선택한 방 미리보기 -->
+  <div id="start" class="overlay overlay-start">
+    <div class="start-panel glass">
+      <button id="back-title" class="secondary small back"><span>← 타이틀</span><kbd>Esc</kbd></button>
+      <div class="brand">
+        <div class="kicker">COZY TIDY-UP</div>
+        <h1 class="logo small"><img src="assets/logo.png" alt="방 정리 대작전"></h1>
+        <p class="tagline">흩어진 물건은 제자리에, 쓰레기는 휴지통으로.</p>
+      </div>
+
+      <div class="field">
+        <div class="field-label">방 선택</div>
+        <div id="maps"></div>
+      </div>
+
+      <div class="field">
+        <div class="field-label">모드</div>
+        <div id="modes"></div>
+      </div>
+
+      <button id="start-btn" class="primary big">정리 시작하기</button>
+
+      <div class="controls">
+        <div><span>이동</span><span><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></span></div>
+        <div><span>집기 · 놓기 · 서랍</span><span><span class="key">클릭</span></span></div>
+        <div><span>던지기</span><span><span class="key">우클릭</span></span></div>
+        <div><span>회전 · 뒤집기</span><span><span class="key">R</span><span class="key">T</span></span></div>
+        <div><span>힌트 (놓을 곳 보기)</span><span><span class="key">F</span></span></div>
+        <div><span>일시정지</span><span><span class="key">Esc</span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2인 대전: 대기 / 준비 / 결과 -->
+  <div id="mp-overlay" class="overlay hidden">
+    <div class="panel glass wide">
+      <div id="mp-kicker" class="kicker">2인 대전</div>
+      <h1 id="mp-title">연결 중…</h1>
+      <div id="mp-code-big" class="mp-code hidden"></div>
+      <div id="mp-role-pick" class="hidden">
+        <div class="field-label">내 역할 고르기 (상대는 자동으로 반대 역할)</div>
+        <div class="seg"><button data-v="tidy">정리 담당</button><button data-v="mess">방해꾼</button></div>
+      </div>
+      <p id="mp-text" class="mp-text"></p>
+      <div id="mp-lines" class="hidden"></div>
+      <div class="btn-row">
+        <button id="mp-ready" class="primary hidden">준비 완료</button>
+        <button id="mp-leave" class="secondary">나가기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2인 대전 경기 중 HUD -->
+  <div id="mp-hud" class="hidden">
+    <div id="mp-role-badge" class="glass"></div>
+    <div id="mp-tug" class="glass">
+      <div class="tug-labels"><span>방해꾼</span><span id="mp-ratio">정리율 0%</span><span>정리 담당</span></div>
+      <div class="tug-track"><div id="mp-tug-fill"></div><div class="tug-goal"></div></div>
+    </div>
+    <div id="mp-energy" class="glass hidden">
+      <div class="kicker">방해 에너지</div>
+      <div class="energy-track"><div id="mp-energy-fill"></div></div>
+      <div id="mp-energy-text">60 / 100</div>
+    </div>
+    <div id="mp-countdown"></div>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <div class="panel glass">
+      <div class="kicker">PAUSED</div>
+      <h1>일시정지</h1>
+      <div id="pause-info"></div>
+
+      <div id="pause-menu" class="menu">
+        <button id="resume-btn" class="primary"><span>계속하기</span><kbd>Enter</kbd></button>
+        <button id="retry-btn" class="secondary"><span>처음부터 다시</span><kbd>R</kbd></button>
+        <button id="home-btn" class="secondary"><span>홈으로</span><kbd>Q</kbd></button>
+        <p id="pause-msg"></p>
+      </div>
+
+      <div id="confirm" class="menu hidden">
+        <p id="confirm-text"></p>
+        <button id="confirm-yes" class="danger"></button>
+        <button id="confirm-no" class="secondary"><span>취소</span><kbd>Esc</kbd></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="finish" class="overlay hidden">
+    <div class="panel glass wide">
+      <div class="kicker">RESULT</div>
+      <h1 id="result-title">방이 반짝반짝해졌어요!</h1>
+      <div id="result-stars"></div>
+      <div id="result-lines"></div>
+      <p id="result-msg"></p>
+      <div class="btn-row">
+        <button id="restart-btn" class="primary">한 번 더 하기</button>
+        <button id="other-btn" class="secondary"></button>
+        <button id="finish-home-btn" class="secondary">홈으로</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

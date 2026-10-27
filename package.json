@@ -1,0 +1,8 @@
+﻿{
+  "name": "room-tidy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "방 정리 대작전 - 로우폴리 3D 방 정리 게임 (싱글/2인 멀티)",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
