@@ -1,4 +1,4 @@
-/* 말랑말랑 방 정리 — 게임 UI
+﻿/* 말랑말랑 방 정리 — 게임 UI
    어두운 반투명 유리 패널 + 크림색 글자 + 따뜻한 앰버 포인트 하나 */
 :root {
   --text: #fbf5ec;
@@ -466,8 +466,8 @@ h1.logo.small img { width: 100%; max-width: 340px; filter: drop-shadow(0 4px 12p
   position: fixed; left: 50%; top: 20px; transform: translateX(-50%);
   padding: 6px 16px; font-size: 13px; font-weight: 800; letter-spacing: 0.04em;
 }
-#mp-role-badge.tidy { color: #8fd0ff; }
-#mp-role-badge.mess { color: #ff9a8a; }
+#mp-role-badge.tidy { color: #7fd6ff; }
+#mp-role-badge.mess { color: #ff9fcb; }
 #mp-tug { position: fixed; left: 50%; top: 58px; transform: translateX(-50%); width: min(460px, 70vw); padding: 8px 14px 10px; }
 .tug-labels { display: flex; justify-content: space-between; font-size: 12px; font-weight: 800; color: var(--text-dim); margin-bottom: 6px; }
 #mp-ratio { color: var(--text); }
@@ -515,3 +515,4 @@ h1.logo.small img { width: 100%; max-width: 340px; filter: drop-shadow(0 4px 12p
 #result-msg { font-size: 14px; color: var(--text-dim); margin-bottom: 16px; }
 .btn-row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .btn-row button { flex: 1 1 auto; }
+
