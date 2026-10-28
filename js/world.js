@@ -1,4 +1,4 @@
-// 맵 공용 빌더: 정적 박스/장식/수납함, 방 껍데기(바닥·벽·천장·들보), 창문·화분·조명·포스터 같은 공용 소품
+﻿// 맵 공용 빌더: 정적 박스/장식/수납함, 방 껍데기(바닥·벽·천장·들보), 창문·화분·조명·포스터 같은 공용 소품
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -6,7 +6,7 @@ import { grainTex, plankTex, stripeTex, posterTex, repeated, make, rng } from '.
 import { kindMat, repeatMaps } from './materials.js';
 
 // 충돌 그룹: 플레이어는 정적 지형과만, 물건은 지형·물건끼리 충돌한다
-export const G = { STATIC: 1, PLAYER: 2, ITEM: 4 };
+export const G = { STATIC: 1, PLAYER: 2, ITEM: 4, OPP: 8 }; // OPP: 멀티에서 상대 플레이어 몸 (플레이어끼리만 부딪힘)
 
 // 방 크기: x -4..4, z -3.5..3.5, 높이 3
 export const ROOM = { w: 8, d: 7, h: 3 };
@@ -441,3 +441,4 @@ export function addPoster(b, wall, u, y, w, h, kind, frameColor = '#ffffff') {
     rot: [0, p.rotY, 0], cast: false,
   });
 }
+

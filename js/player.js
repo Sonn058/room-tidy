@@ -1,4 +1,4 @@
-// 1인칭 플레이어: 물리 캡슐 이동 + 부드러운 카메라
+﻿// 1인칭 플레이어: 물리 캡슐 이동 + 부드러운 카메라
 import * as CANNON from 'cannon-es';
 import { G } from './world.js';
 import { sfx } from './audio.js';
@@ -18,7 +18,7 @@ export class Player {
       fixedRotation: true,
       allowSleep: false,
       collisionFilterGroup: G.PLAYER,
-      collisionFilterMask: G.STATIC,
+      collisionFilterMask: G.STATIC | G.OPP,
     });
     const r = this.radius;
     b.addShape(new CANNON.Sphere(r));
@@ -73,7 +73,7 @@ export class Player {
     const k = this.keys;
     const f = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0);
     const s = (k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0);
-    this.crouching = !!(k.KeyC || k.ControlLeft);
+    this.crouching = !!k.KeyC; // Ctrl은 브라우저 단축키(Ctrl+W 탭 닫기 등)와 겹쳐서 쓰지 않는다
     this.running = !!(k.ShiftLeft || k.ShiftRight) && f > 0 && !this.crouching;
     const speed = this.crouching ? 1.4 : this.running ? 4.3 : 2.6;
 
@@ -154,3 +154,4 @@ export class Player {
     cam.rotation.set(this.pitch + this.land * 0.05, this.yaw, this.roll);
   }
 }
+
