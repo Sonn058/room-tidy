@@ -66,11 +66,37 @@ function makeHalo() {
   s.renderOrder = 15; s.visible = false;
   return s;
 }
+// 상대 캐릭터 동작: 걸을 때 다리·팔을 번갈아 휘젓고 몸이 통통 튀며, 물건을 들고 있으면 두 팔을 물건 쪽으로 뻗는다
+export function animateAvatar(av, dt, speed, item) {
+  const u = av.userData;
+  if (!u.legs) return;
+  const walk = Math.min(1, speed / 2.6); // 걷는 속도(2.6)에서 최대로 흔들림
+  u.phase += dt * (3 + speed * 2.4);
+  const sw = Math.sin(u.phase) * 0.75 * walk;
+  u.legs[0].rotation.x = sw;
+  u.legs[1].rotation.x = -sw;
+  // 물건을 들었는가: 0(내림) → 1(뻗음)을 부드럽게
+  u.hold += ((item ? 1 : 0) - u.hold) * (1 - Math.exp(-dt * 12));
+  let reach = 1.3;
+  if (item) { // 어깨에서 물건까지의 방향으로 팔 각도를 정함 (위에 있으면 더 들어 올림)
+    const sh = av.position.y + 0.55 * AVATAR_SCALE;
+    const d = Math.hypot(item.mesh.position.x - av.position.x, item.mesh.position.z - av.position.z);
+    reach = Math.max(0.5, Math.min(2.4, Math.atan2(d, sh - item.mesh.position.y)));
+  }
+  u.reach = item ? reach : (u.reach || 1.3);
+  [-1, 1].forEach((s, k) => {
+    const swing = (k === 0 ? -sw : sw) * 0.8; // 팔은 같은 쪽 다리의 반대로
+    u.arms[k].rotation.x = u.hold * u.reach + (1 - u.hold) * swing;
+    u.arms[k].rotation.z = s * (0.1 - 0.24 * u.hold); // 내려놓았을 땐 살짝 벌리고, 들 땐 안쪽으로 모아 쥠
+  });
+  av.position.y += Math.abs(Math.sin(u.phase)) * 0.04 * walk; // 걸을 때 통통
+}
+
 const AVATAR_SCALE = 1.5; // 캐릭터 크기 배율 (1 = 키 약 0.85m)
 // 상대 플레이어 모습: 헤드폰 낀 통통한 콩 캐릭터 + 역할 이름표
-function makeAvatar(role) {
+export function makeAvatar(role) {
   const g = new THREE.Group();
-  const color = role === 'tidy' ? '#9a5fe0' : '#ff7a6b';
+  const color = role === 'tidy' ? '#5ec8f2' : '#ff7eb6'; // 정리 담당 하늘색 · 방해꾼 분홍색
   const mat = (c, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.55, ...extra });
   const part = (geo, m, x, y, z, rot = [0, 0, 0], sc = [1, 1, 1]) => {
     const o = new THREE.Mesh(geo, m);
@@ -81,14 +107,22 @@ function makeAvatar(role) {
   const skin = mat(color);
   // 몸통: 위아래로 길쭉한 콩
   part(new THREE.SphereGeometry(1, 28, 20), skin, 0, 0.5, 0, [0, 0, 0], [0.2, 0.3, 0.18]);
-  // 다리 · 발
-  for (const s of [-1, 1]) {
-    part(new THREE.CapsuleGeometry(0.024, 0.16, 4, 8), skin, s * 0.075, 0.14, 0);
-    part(new THREE.SphereGeometry(1, 12, 8), skin, s * 0.075, 0.025, -0.025, [0, 0, 0], [0.05, 0.028, 0.075]);
-  }
-  // 팔: 한쪽은 옆으로 쭉, 한쪽은 아래로
-  part(new THREE.CapsuleGeometry(0.022, 0.22, 4, 8), skin, 0.31, 0.52, 0, [0, 0, Math.PI / 2 - 0.08]);
-  part(new THREE.CapsuleGeometry(0.022, 0.22, 4, 8), skin, -0.228, 0.396, 0, [0, 0, -0.3]);
+  // 다리 · 팔은 관절(엉덩이·어깨) 위치에 축을 두고 흔든다 (걷기 · 물건 집기 동작)
+  const joint = (x, y) => { const j = new THREE.Group(); j.position.set(x, y, 0); g.add(j); return j; };
+  const limb = (j, geo, y, m = skin) => { const o = new THREE.Mesh(geo, m); o.position.y = y; o.castShadow = true; j.add(o); return o; };
+  const legs = [-1, 1].map((s) => {
+    const j = joint(s * 0.075, 0.24);
+    limb(j, new THREE.CapsuleGeometry(0.024, 0.16, 4, 8), -0.1);
+    const foot = limb(j, new THREE.SphereGeometry(1, 12, 8), -0.215);
+    foot.position.z = -0.025; foot.scale.set(0.05, 0.028, 0.075);
+    return j;
+  });
+  const arms = [-1, 1].map((s) => {
+    const j = joint(s * 0.19, 0.55);
+    limb(j, new THREE.CapsuleGeometry(0.022, 0.22, 4, 8), -0.13);
+    return j;
+  });
+  g.userData = { legs, arms, phase: 0, hold: 0 };
   // 헤드폰: 머리띠 + 노란 귀덮개
   const yellow = mat('#ffc21a', { roughness: 0.4 }), dark = mat('#2a2230');
   part(new THREE.TorusGeometry(0.2, 0.014, 8, 28, Math.PI), dark, 0, 0.62, 0);
@@ -664,10 +698,10 @@ export function setupMultiplayer(g) {
     }
 
     // 상대가 들고 있는 물건에 빛무리를 씌워 눈에 띄게
+    const theirs = isHost ? remoteHeld : items.find((x) => x.held && x !== interaction.held && !x.removed);
     {
-      const theirs = isHost ? remoteHeld : items.find((x) => x.held && x !== interaction.held && !x.removed);
       if (theirs && mp.myRole) {
-        const col = mp.myRole === 'mess' ? '#9a5fe0' : '#ff7a6b'; // 상대 역할 색
+        const col = mp.myRole === 'mess' ? '#5ec8f2' : '#ff7eb6'; // 상대 역할 색
         halo.material.color.set(col);
         halo.position.copy(theirs.mesh.position);
         halo.scale.setScalar(0.7 + 0.08 * Math.sin(performance.now() / 160));
@@ -678,10 +712,12 @@ export function setupMultiplayer(g) {
     if (avatar && remote && remote.p) {
       avatar.visible = true;
       const a = 1 - Math.exp(-dt * 14);
+      const prevX = avatarPos.x, prevZ = avatarPos.z;
       avatarPos.lerp(new THREE.Vector3(remote.p[0], remote.p[1] - 0.3, remote.p[2]), avatarPos.lengthSq() ? a : 1);
       avatarYaw += ((remote.yaw || 0) - avatarYaw) * a;
       avatar.position.copy(avatarPos);
       avatar.rotation.y = avatarYaw;
+      animateAvatar(avatar, dt, Math.hypot(avatarPos.x - prevX, avatarPos.z - prevZ) / Math.max(dt, 1e-3), theirs);
       if (oppBody) oppBody.position.set(avatarPos.x, avatarPos.y + 0.3, avatarPos.z);
     }
 
@@ -766,6 +802,8 @@ export function setupMultiplayer(g) {
 
   return mp;
 }
+
+
 
 
 
